@@ -4,13 +4,25 @@
 
 {% block content %}
   <section class="welcome-panel" aria-labelledby="welcome-title">
-    <p class="eyebrow">Shared starter foundation</p>
-    <h1 id="welcome-title">Campus service, matched by skill.</h1>
-    <p class="welcome-copy">
-      SkillMatch will connect student volunteers with campus events that need their skills.
-      This shared foundation is ready for each teammate to add their own feature area.
-    </p>
-    <p class="status-pill"><span aria-hidden="true"></span> Feature routes are not added yet</p>
+    <div class="welcome-copy-column">
+      <p class="eyebrow">Shared starter foundation</p>
+      <h1 id="welcome-title">Campus service, matched by skill.</h1>
+      <p class="welcome-copy">
+        SkillMatch will connect student volunteers with campus events that need their skills.
+        This shared foundation is ready for each teammate to add their own feature area.
+      </p>
+      <p class="status-pill"><span aria-hidden="true"></span> Feature routes are not added yet</p>
+    </div>
+    <figure class="campus-figure">
+      <img
+        src="{{ url_for('static', filename='images/mitwpu-dome.jpeg') }}"
+        alt="The Dome and stone arcade at MIT World Peace University in Pune"
+        width="775"
+        height="517"
+        fetchpriority="high"
+      >
+      <figcaption>MIT World Peace University · Pune</figcaption>
+    </figure>
   </section>
 
   <section id="team-areas" class="team-section" aria-labelledby="team-title">

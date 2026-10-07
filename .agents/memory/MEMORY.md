@@ -1,0 +1,1 @@
+- [Workflow config activation](workflow-config-activation.md) — changing a validated workflow command can leave the old process running; restart explicitly and verify the public preview.

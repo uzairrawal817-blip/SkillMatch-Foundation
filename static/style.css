@@ -168,6 +168,10 @@ a:hover {
 
 .welcome-panel {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.8fr);
+  align-items: center;
+  gap: clamp(1.5rem, 3vw, 2.75rem);
   overflow: hidden;
   padding: clamp(2rem, 6vw, 5rem);
   border: 1px solid rgb(255 255 255 / 48%);
@@ -181,6 +185,7 @@ a:hover {
 
 .welcome-panel::after {
   position: absolute;
+  z-index: 0;
   right: -3.5rem;
   bottom: -5rem;
   width: 14rem;
@@ -192,16 +197,45 @@ a:hover {
   pointer-events: none;
 }
 
+.welcome-copy-column,
+.campus-figure {
+  position: relative;
+  z-index: 1;
+}
+
+.campus-figure {
+  margin: 0;
+}
+
+.campus-figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.35 / 1;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 1.15rem;
+  object-fit: cover;
+  object-position: 64% center;
+  box-shadow: 0 16px 40px rgb(5 37 31 / 28%);
+}
+
+.campus-figure figcaption {
+  margin-top: 0.75rem;
+  color: rgb(255 255 255 / 82%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .welcome-panel .eyebrow {
   color: #f2d58d;
 }
 
 .welcome-panel h1,
 .not-found-panel h1 {
-  max-width: 13ch;
+  max-width: 14ch;
   margin: 1rem 0;
   font-family: var(--font-display);
-  font-size: clamp(2.7rem, 6vw, 5.4rem);
+  font-size: clamp(2.7rem, 4.8vw, 4.5rem);
   font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 0.99;
@@ -496,6 +530,12 @@ a:hover {
   .page-content {
     padding-inline: clamp(1.25rem, 4vw, 2.5rem);
   }
+
+  .welcome-panel {
+    grid-template-columns: minmax(0, 1.15fr) minmax(14rem, 0.85fr);
+    gap: 1.5rem;
+    padding: clamp(1.75rem, 4vw, 3rem);
+  }
 }
 
 @media (max-width: 650px) {
@@ -519,7 +559,13 @@ a:hover {
   }
 
   .welcome-panel {
+    grid-template-columns: 1fr;
     border-radius: 1.3rem;
+  }
+
+  .campus-figure img {
+    aspect-ratio: 1.55 / 1;
+    object-position: 62% center;
   }
 }
 
@@ -549,7 +595,9 @@ a:hover {
   }
 
   .welcome-panel h1 {
-    font-size: clamp(2.35rem, 12vw, 3.2rem);
+    max-width: 15ch;
+    font-size: clamp(2.2rem, 10vw, 2.8rem);
+    line-height: 1.05;
   }
 
   .team-grid {
