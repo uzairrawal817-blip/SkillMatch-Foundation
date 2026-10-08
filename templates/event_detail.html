@@ -1,0 +1,136 @@
+{% if not partial %}{% extends "base.html" %}{% endif %}
+{% from "macros.html" import toast %}
+
+{% macro application_control() -%}
+  <section id="event-application" aria-label="Event application" aria-live="polite">
+    {% if error %}
+      {{ toast(error, "error") }}
+    {% elif blocked_reason %}
+      <p role="status">{{ blocked_reason }}</p>
+    {% endif %}
+    {% if apply_status == "Apply" and not blocked_reason %}
+      <form method="post"
+            action="{{ url_for('events.apply', event_id=event_id) }}"
+            hx-post="{{ url_for('events.apply', event_id=event_id) }}"
+            hx-trigger="submit"
+            hx-target="#event-application"
+            hx-swap="outerHTML"
+            hx-disabled-elt="find button">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button button--primary" type="submit">Apply</button>
+      </form>
+    {% else %}
+      <button class="button button--secondary" type="button" disabled>
+        {{ apply_status }}
+      </button>
+    {% endif %}
+  </section>
+{%- endmacro %}
+
+{% macro bookmark_control() -%}
+  <section class="saved-event-control" aria-label="Saved event" aria-live="polite">
+    {% if bookmark_error %}
+      <p role="alert">{{ bookmark_error }}</p>
+    {% endif %}
+    <form method="post"
+          action="{{ url_for('events.toggle_saved', event_id=event_id) }}"
+          hx-post="{{ url_for('events.toggle_saved', event_id=event_id) }}"
+          hx-trigger="submit"
+          hx-target="closest .saved-event-control"
+          hx-swap="outerHTML"
+          hx-disabled-elt="find button">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button {{ 'button--secondary' if is_saved else 'button--primary' }}"
+              type="submit"
+              aria-pressed="{{ 'true' if is_saved else 'false' }}">
+        {{ "Saved" if is_saved else "Save event" }}
+      </button>
+    </form>
+  </section>
+{%- endmacro %}
+
+{% block title %}{% if not partial %}{{ event.name }} · SkillMatch{% endif %}{% endblock %}
+
+{% block content %}
+  {% if partial == "bookmark" %}
+    {{ bookmark_control() }}
+  {% elif partial %}
+    {{ application_control() }}
+  {% else %}
+    <article aria-labelledby="event-detail-title">
+      <p><a href="{{ url_for('events.discover') }}">Back to discover events</a></p>
+      <header class="section-heading">
+        {% set event_url = url_for('events.event_detail', event_id=event_id, _external=True) %}
+        {% set whatsapp_text = event.name ~ " " ~ event_url %}
+        <p class="eyebrow">Event {{ event_id }} · {{ event.status }}</p>
+        <h1 id="event-detail-title">{{ event.name }}</h1>
+        {% if badges %}
+          <div aria-label="Event badges" style="display:flex; flex-wrap:wrap; gap:0.5rem">
+            {% for badge in badges %}
+              <span class="status-pill" style="margin:0">{{ badge }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <div style="margin-top:1rem">
+          {{ bookmark_control() }}
+        </div>
+        <div aria-label="Share event" style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-top:0.75rem">
+          <a class="button button--secondary"
+             href="https://wa.me/?text={{ whatsapp_text|urlencode }}"
+             target="_blank"
+             rel="noopener noreferrer">Share on WhatsApp</a>
+          <button class="button button--secondary"
+                  type="button"
+                  data-copy-event-link="{{ event_url }}"
+                  aria-live="polite">Copy event link</button>
+        </div>
+      </header>
+
+      <section class="team-card" aria-labelledby="event-about-title">
+        <h2 id="event-about-title">About this event</h2>
+        <p style="white-space:pre-wrap">{{ event.description }}</p>
+        <dl>
+          <dt>Organizer</dt><dd>{{ event.organizer }}</dd>
+          <dt>Event status</dt><dd>{{ event.status }}</dd>
+          <dt>Volunteer capacity</dt><dd>{{ event.slots_needed }}</dd>
+          <dt>Seats remaining</dt><dd>{{ seats_left }}</dd>
+          {% set department = event.get("department") or event.get("dept") %}
+          {% if department %}
+            <dt>Department</dt><dd>{{ department }}</dd>
+          {% endif %}
+          {% set event_type = event.get("type") or event.get("event_type") %}
+          {% if event_type %}
+            <dt>Event type</dt><dd>{{ event_type }}</dd>
+          {% endif %}
+          {% set starts_at = event.get("starts_at") or event.get("start_at") or event.get("start_date") or event.get("event_date") or event.get("date") %}
+          {% if starts_at %}
+            <dt>Starts</dt><dd>{{ starts_at }}</dd>
+          {% endif %}
+          {% if event.get("ends_at") %}
+            <dt>Ends</dt><dd>{{ event.ends_at }}</dd>
+          {% endif %}
+          {% if event.get("location") or event.get("venue") %}
+            <dt>Location</dt><dd>{{ event.get("location") or event.get("venue") }}</dd>
+          {% endif %}
+          {% if event.get("created_at") %}
+            <dt>Created</dt><dd>{{ event.created_at }}</dd>
+          {% endif %}
+        </dl>
+        <h2>Required skills</h2>
+        {% if event.required_skills %}
+          <ul>
+            {% for name, rating in event.required_skills.items() %}
+              <li>{{ name }}: minimum rating {{ rating }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No specific skills are required.</p>
+        {% endif %}
+      </section>
+
+      <div style="margin-top:1.5rem">
+        {{ application_control() }}
+      </div>
+    </article>
+  {% endif %}
+{% endblock %}
