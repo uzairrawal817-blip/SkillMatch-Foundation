@@ -13,3 +13,19 @@ document.addEventListener("click", (event) => {
   if (!clickedBackdrop && !clickedCloseButton) return;
   document.getElementById("modal-root")?.replaceChildren();
 });
+
+// Clipboard access has no Python or HTMX equivalent.
+async function copyEventLink(event) {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest("[data-copy-event-link]");
+  if (!button) return;
+
+  try {
+    await navigator.clipboard.writeText(button.dataset.copyEventLink);
+    button.textContent = "Link copied";
+  } catch {
+    button.textContent = "Copy unavailable";
+  }
+}
+
+document.addEventListener("click", copyEventLink);

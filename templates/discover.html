@@ -14,7 +14,7 @@
           <p>{{ event.description }}</p>
 
           <p><strong>Organizer:</strong> {{ event.organizer }}</p>
-          <p><strong>Open volunteer slots:</strong> {{ event.slots_needed }}</p>
+          <p><strong>Seats remaining:</strong> {{ match.seats_left }}</p>
 
           {% if event.required_skills %}
             <p>

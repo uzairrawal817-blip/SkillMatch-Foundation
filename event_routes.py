@@ -22,6 +22,22 @@ from event_service import (
 
 events_bp = Blueprint("events", __name__, url_prefix="/events")
 
+def _seats_left(event, event_applications):
+    """Count accepted applications consistently for cards and event details."""
+    if not isinstance(event_applications, dict) or any(
+        not isinstance(application, dict) for application in event_applications.values()
+    ):
+        raise ValueError("Event applications must contain application objects.")
+    capacity = event.get("slots_needed")
+    if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity <= 0:
+        raise ValueError("The event must have a positive slots_needed value.")
+    accepted_count = sum(
+        isinstance(application.get("status"), str)
+        and application["status"].casefold() == "accepted"
+        for application in event_applications.values()
+    )
+    return max(0, capacity - accepted_count)
+
 
 @events_bp.get("/discover")
 @_login_required
@@ -37,15 +53,19 @@ def discover():
     user = g.current_user
     matches = find_eligible_events(user, **filters)
     saved_event_ids = set(get_saved_event_ids(user["username"]))
-    event_cards = [
-        {
+    applications = load(APPLICATIONS_FILE)
+    if not isinstance(applications, dict):
+        raise ValueError("applications.json must contain an object keyed by event ID.")
+    event_cards = []
+    for event_id, event in matches:
+        seats_left = _seats_left(event, applications.get(event_id, {}))
+        event_cards.append({
             "event_id": event_id,
             "event": event,
-            "badges": get_badges(event, user),
+            "seats_left": seats_left,
+            "badges": get_badges({**event, "seats_left": seats_left}, user),
             "is_saved": event_id in saved_event_ids,
-        }
-        for event_id, event in matches
-    ]
+        })
 
     return render_template(
         "discover.html",
@@ -70,20 +90,7 @@ def _detail_context(event_id):
     if not isinstance(applications, dict):
         raise ValueError("applications.json must contain an object keyed by event ID.")
     event_applications = applications.get(event_id, {})
-    if not isinstance(event_applications, dict) or any(
-        not isinstance(application, dict)
-        for application in event_applications.values()
-    ):
-        raise ValueError("Event applications must contain application objects.")
-    accepted_count = sum(
-        isinstance(application.get("status"), str)
-        and application["status"].casefold() == "accepted"
-        for application in event_applications.values()
-    )
-    capacity = event.get("slots_needed")
-    if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity <= 0:
-        raise ValueError("The event must have a positive slots_needed value.")
-    seats_left = max(0, capacity - accepted_count)
+    seats_left = _seats_left(event, event_applications)
     status = get_apply_status(g.current_user["username"], event_id)
     ends_at = _as_utc_datetime(event.get("ends_at"))
     blocked_reason = None

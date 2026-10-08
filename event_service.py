@@ -20,6 +20,48 @@ REQUIRED_FIELDS = (
     "slots_needed",
 )
 
+def _event_metadata(data: Mapping[str, Any]) -> dict[str, str]:
+    """Validate optional filter, location, and scheduling fields before saving."""
+    metadata: dict[str, str] = {}
+    for canonical, aliases in (
+        ("department", ("department", "dept")),
+        ("type", ("type", "event_type")),
+        ("location", ("location", "venue")),
+    ):
+        for field in aliases:
+            value = data.get(field)
+            if value is None or value == "":
+                continue
+            if not isinstance(value, str):
+                raise ValueError(f"'{field}' must be a string.")
+            if value.strip() and canonical not in metadata:
+                metadata[canonical] = value.strip()
+
+    for canonical, aliases in (
+        ("date", ("date", "event_date")),
+        ("starts_at", ("starts_at", "start_at", "start_date")),
+        ("ends_at", ("ends_at",)),
+    ):
+        for field in aliases:
+            value = data.get(field)
+            if value is None or value == "":
+                continue
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"'{field}' must be an ISO date or timestamp.")
+            parsed = _as_utc_datetime(value)
+            if parsed is None:
+                raise ValueError(f"'{field}' must be a valid ISO date or timestamp.")
+            if canonical not in metadata:
+                metadata[canonical] = (
+                    parsed.date().isoformat() if canonical == "date" else parsed.isoformat()
+                )
+
+    starts_at = _as_utc_datetime(metadata.get("starts_at"))
+    ends_at = _as_utc_datetime(metadata.get("ends_at"))
+    if starts_at is not None and ends_at is not None and ends_at <= starts_at:
+        raise ValueError("'ends_at' must be later than 'starts_at'.")
+    return metadata
+
 
 def create_event(data: Mapping[str, Any]) -> str:
     """Validate and save an event, returning its generated event ID."""
@@ -75,6 +117,7 @@ def create_event(data: Mapping[str, Any]) -> str:
     if status not in ("open", "completed"):
         raise ValueError("'status' must be 'open' or 'completed'.")
 
+    metadata = _event_metadata(data)
     events = load(EVENTS_FILE)
     if not isinstance(events, dict):
         raise ValueError("events.json must contain an object keyed by event ID.")
@@ -95,6 +138,7 @@ def create_event(data: Mapping[str, Any]) -> str:
         "slots_needed": slots_needed,
         "status": status,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        **metadata,
     }
     save(EVENTS_FILE, events)
     return event_id
@@ -183,7 +227,9 @@ def find_eligible_events(
         ):
             continue
 
-        event_date = event.get("date", event.get("event_date"))
+        event_date = _first_event_value(
+            event, ("date", "event_date", "starts_at", "start_at", "start_date")
+        )
         if date_filter and (
             not isinstance(event_date, str)
             or not event_date.strip().casefold().startswith(date_filter)
@@ -244,6 +290,9 @@ def _remaining_seats(event: Mapping[str, Any]) -> int | None:
         application_records = applications.values()
     elif isinstance(applications, (list, tuple)):
         application_records = applications
+    elif applications is None:
+        # A standalone newly created event has no accepted applications yet.
+        return slots_needed
     else:
         return None
 
