@@ -5,12 +5,20 @@ import os
 from flask import Flask, render_template
 
 from auth_routes import auth_bp
+from certificate_routes import certificates_bp
+from dashboard_routes import dashboard_bp
 from event_routes import events_bp
+from formatting import format_decimal
+from notification_routes import notifications_bp
 
 
 app = Flask(__name__)
+app.jinja_env.filters["format_decimal"] = format_decimal
 app.register_blueprint(auth_bp)
+app.register_blueprint(certificates_bp)
+app.register_blueprint(dashboard_bp)
 app.register_blueprint(events_bp)
+app.register_blueprint(notifications_bp)
 
 
 @app.get("/")
@@ -40,6 +48,12 @@ def home():
 def page_not_found(_error):
     """Render the shared not-found page for unknown routes."""
     return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(_error):
+    """Show a friendly page without exposing internal exception details."""
+    return render_template("500.html"), 500
 
 
 if __name__ == "__main__":
