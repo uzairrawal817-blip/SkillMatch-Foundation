@@ -23,13 +23,7 @@
         <span>SkillMatch</span>
       </a>
       <p class="site-tagline">Campus service, matched by skill.</p>
-      <nav class="primary-nav" aria-label="Primary navigation">
-        <details class="nav-menu">
-          <summary class="nav-menu-toggle">
-            <span class="nav-menu-icon" aria-hidden="true"><span></span></span>
-            <span>Menu</span>
-          </summary>
-          <div class="top-nav">
+      {% macro navigation_links() %}
             <a href="{{ url_for('home') }}">Home</a>
             <a href="{{ url_for('events.discover') }}">Discover events</a>
             <a href="{{ url_for('certificates.verify') }}">Verify certificate</a>
@@ -40,10 +34,31 @@
               <a href="{{ url_for('dashboard.home') }}">Organizer dashboard</a>
             {% endif %}
             {% if current_user %}
+              <a href="{{ url_for('notifications.home') }}">
+                Notifications
+                {% if notification_unread_count %}
+                  <span class="notification-count" aria-label="{{ notification_unread_count }} unread">
+                    {{ notification_unread_count }}
+                  </span>
+                {% endif %}
+              </a>
               <a href="{{ url_for('auth.profile') }}">Profile</a>
             {% else %}
               <a href="{{ url_for('auth.login') }}">Sign in</a>
             {% endif %}
+      {% endmacro %}
+      <nav class="primary-nav" aria-label="Primary navigation">
+        {# Closed details hide their contents even when child CSS says display:flex. #}
+        <div class="top-nav top-nav--desktop">
+          {{ navigation_links() }}
+        </div>
+        <details class="nav-menu">
+          <summary class="nav-menu-toggle">
+            <span class="nav-menu-icon" aria-hidden="true"><span></span></span>
+            <span>Menu</span>
+          </summary>
+          <div class="top-nav">
+            {{ navigation_links() }}
           </div>
         </details>
       </nav>
@@ -56,10 +71,12 @@
         {% if active_role == "Organizer" %}
           <p class="sidebar-placeholder">Organizer workspace</p>
           <a href="{{ url_for('dashboard.home') }}">Review applications</a>
+          <a href="{{ url_for('notifications.home') }}">Notifications{% if notification_unread_count %} ({{ notification_unread_count }}){% endif %}</a>
           <a href="{{ url_for('certificates.home') }}">Complete events &amp; certificates</a>
         {% elif active_role == "Student Volunteer" %}
           <p class="sidebar-placeholder">Volunteer workspace</p>
           <a href="{{ url_for('events.discover') }}">Find events</a>
+          <a href="{{ url_for('notifications.home') }}">Notifications{% if notification_unread_count %} ({{ notification_unread_count }}){% endif %}</a>
           <a href="{{ url_for('certificates.home') }}">My certificates</a>
         {% else %}
           <p class="sidebar-placeholder">Sign in to use your SkillMatch workspace.</p>
