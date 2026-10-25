@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "macros.html" import empty_state, toast %}
+
+{% block title %}Notifications · SkillMatch{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <p class="eyebrow">Your activity</p>
+    <h1>Notifications</h1>
+    <p>Event updates and decisions for your SkillMatch account.</p>
+  </section>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      {{ toast(message, category) }}
+    {% endfor %}
+  {% endwith %}
+
+  {% if notifications %}
+    <div class="notification-toolbar">
+      <p>{{ notifications|length }} notification{{ "" if notifications|length == 1 else "s" }}</p>
+      <form method="post" action="{{ url_for('notifications.mark_all_read') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button button--secondary" type="submit">Mark all as read</button>
+      </form>
+    </div>
+    <section class="notification-list" aria-label="Your notifications">
+      {% for notification in notifications %}
+        <article class="notification-card{% if not notification.is_read %} notification-card--unread{% endif %}">
+          <div class="notification-card-heading">
+            <h2>{{ notification.title }}</h2>
+            {% if not notification.is_read %}
+              <span class="notification-state">New</span>
+            {% else %}
+              <span class="notification-state notification-state--read">Read</span>
+            {% endif %}
+          </div>
+          <p>{{ notification.message }}</p>
+          <div class="notification-card-actions">
+            <time datetime="{{ notification.created_at }}">{{ notification.created_display }}</time>
+            {% if notification.event_id %}
+              <a class="button button--secondary"
+                 href="{{ url_for('events.event_detail', event_id=notification.event_id) }}">View event</a>
+            {% endif %}
+            {% if not notification.is_read %}
+              <form method="post"
+                    action="{{ url_for('notifications.mark_read', notification_id=notification.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="button button--secondary" type="submit">Mark as read</button>
+              </form>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  {% else %}
+    {{ empty_state("You’re all caught up. Event updates will appear here.", "Discover events", url_for("events.discover")) }}
+  {% endif %}
+{% endblock %}
