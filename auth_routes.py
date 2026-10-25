@@ -22,7 +22,9 @@ from flask import (
 )
 
 from auth_service import login_user, register_user
+from certificate_service import get_user_certificates
 from data_store import load, save
+from notification_service import get_unread_notification_count
 
 
 USERS_FILE = "users.json"
@@ -82,9 +84,19 @@ def _inject_auth_context():
     if not token:
         token = secrets.token_urlsafe(32)
         session["csrf_token"] = token
+    current_user = getattr(g, "current_user", None)
+    notification_unread_count = 0
+    if (
+        isinstance(current_user, dict)
+        and current_user.get("role") in {"Organizer", "Student Volunteer"}
+    ):
+        notification_unread_count = get_unread_notification_count(
+            current_user["username"]
+        )
     return {
-        "current_user": getattr(g, "current_user", None),
+        "current_user": current_user,
         "csrf_token": token,
+        "notification_unread_count": notification_unread_count,
     }
 
 
@@ -191,6 +203,8 @@ def _parse_skills(raw_skills: str) -> tuple[dict[str, int] | None, str | None]:
 
 def _profile_completion(user: dict) -> int:
     name_complete = bool(str(user.get("name") or "").strip())
+    if user.get("role") == "Organizer":
+        return 100 if name_complete else 0
     dept_complete = bool(str(user.get("dept") or "").strip())
     skills = user.get("skills")
     skills_complete = isinstance(skills, dict) and bool(skills)
@@ -222,12 +236,28 @@ def _profile_context(editing: bool, form_data: dict | None = None) -> dict:
     }
     if form_data:
         default_form_data.update(form_data)
+    certificate_notifications = []
+    certificate_notification_error = None
+    if not editing and user.get("role") == "Student Volunteer":
+        try:
+            certificate_notifications = [
+                record
+                for record in get_user_certificates(user["username"])
+                if isinstance(record.get("verification_code"), str)
+                and len(record["verification_code"]) == 10
+                and record["verification_code"].isalnum()
+            ]
+        except ValueError as error:
+            certificate_notification_error = str(error)
     return {
         "user": user,
+        "is_organizer": user.get("role") == "Organizer",
         "completion_percent": _profile_completion(user),
         "editing": editing,
         "form_data": default_form_data,
         "skill_items": sorted(skills.items(), key=lambda item: item[0].casefold()),
+        "certificate_notifications": certificate_notifications,
+        "certificate_notification_error": certificate_notification_error,
     }
 
 
@@ -236,7 +266,12 @@ def register():
     if request.method == "GET":
         if getattr(g, "current_user", None) is not None:
             return _redirect_after_post(url_for("auth.profile"))
-        return render_template("register.html", **_registration_context())
+        role = request.args.get("role", "Student Volunteer")
+        if role not in ("Organizer", "Student Volunteer"):
+            role = "Student Volunteer"
+        return render_template(
+            "register.html", **_registration_context({"role": role})
+        )
     if not _valid_csrf_token():
         return _csrf_failure()
 
@@ -247,13 +282,30 @@ def register():
         "dept": request.form.get("dept", "").strip(),
         "skills": request.form.get("skills", "").strip(),
     }
-    skills, skills_error = _parse_skills(form_data["skills"])
-    if skills_error:
-        return _form_error(
-            skills_error,
-            "register.html",
-            _registration_context(form_data),
-        )
+    if form_data["role"] == "Organizer":
+        form_data["dept"] = ""
+        form_data["skills"] = ""
+        skills = {}
+    else:
+        if not form_data["dept"]:
+            return _form_error(
+                "Enter your department.",
+                "register.html",
+                _registration_context(form_data),
+            )
+        skills, skills_error = _parse_skills(form_data["skills"])
+        if skills_error:
+            return _form_error(
+                skills_error,
+                "register.html",
+                _registration_context(form_data),
+            )
+        if not skills:
+            return _form_error(
+                "Add at least one skill to your volunteer profile.",
+                "register.html",
+                _registration_context(form_data),
+            )
 
     success, message = register_user(
         username=form_data["username"],
@@ -275,6 +327,22 @@ def register():
     session.permanent = True
     flash(message, "success")
     return _redirect_after_post(url_for("auth.profile"))
+
+
+@auth_bp.get("/register/profile-fields")
+def registration_profile_fields():
+    """Return role-specific registration fields after an HTMX role change."""
+    role = request.args.get("role", "Student Volunteer")
+    if role not in ("Organizer", "Student Volunteer"):
+        role = "Student Volunteer"
+    return render_template(
+        "registration_fields.html",
+        selected_role=role,
+        form_data={
+            "dept": request.args.get("dept", ""),
+            "skills": request.args.get("skills", ""),
+        },
+    )
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -341,27 +409,43 @@ def edit_profile():
             "profile.html",
             _profile_context(editing=True, form_data=form_data),
         )
-    if len(form_data["dept"]) > 100:
-        return _form_error(
-            "Department names can be up to 100 characters.",
-            "profile.html",
-            _profile_context(editing=True, form_data=form_data),
-        )
-
-    skills, skills_error = _parse_skills(form_data["skills"])
-    if skills_error:
-        return _form_error(
-            skills_error,
-            "profile.html",
-            _profile_context(editing=True, form_data=form_data),
-        )
-
     username = session.get("username")
     users = load(USERS_FILE)
     account = users.get(username) if isinstance(users, dict) else None
     if not isinstance(account, dict):
         session.clear()
         return _redirect_after_post(url_for("auth.login"))
+
+    if account.get("role") == "Organizer":
+        form_data["dept"] = ""
+        form_data["skills"] = ""
+        skills = {}
+    else:
+        if not form_data["dept"]:
+            return _form_error(
+                "Enter your department.",
+                "profile.html",
+                _profile_context(editing=True, form_data=form_data),
+            )
+        if len(form_data["dept"]) > 100:
+            return _form_error(
+                "Department names can be up to 100 characters.",
+                "profile.html",
+                _profile_context(editing=True, form_data=form_data),
+            )
+        skills, skills_error = _parse_skills(form_data["skills"])
+        if skills_error:
+            return _form_error(
+                skills_error,
+                "profile.html",
+                _profile_context(editing=True, form_data=form_data),
+            )
+        if not skills:
+            return _form_error(
+                "Add at least one skill to your volunteer profile.",
+                "profile.html",
+                _profile_context(editing=True, form_data=form_data),
+            )
 
     account.update(
         name=form_data["name"],
