@@ -1,5 +1,6 @@
 """Event creation backed by the shared JSON data store."""
 
+import math
 import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ from typing import Any
 
 from auth_service import check_eligibility
 from data_store import load, save
+from notification_service import add_notifications
 
 
 EVENTS_FILE = "events.json"
@@ -63,8 +65,8 @@ def _event_metadata(data: Mapping[str, Any]) -> dict[str, str]:
     return metadata
 
 
-def create_event(data: Mapping[str, Any]) -> str:
-    """Validate and save an event, returning its generated event ID."""
+def validate_event_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate and normalize event fields without saving them."""
     if not isinstance(data, Mapping):
         raise ValueError("Event data must be a mapping of field names to values.")
 
@@ -113,11 +115,39 @@ def create_event(data: Mapping[str, Any]) -> str:
     ):
         raise ValueError("'slots_needed' must be a positive whole number.")
 
+    duration_hours = data.get("duration_hours")
+    if duration_hours is not None:
+        if (
+            not isinstance(duration_hours, (int, float))
+            or isinstance(duration_hours, bool)
+            or not math.isfinite(duration_hours)
+            or duration_hours <= 0
+        ):
+            raise ValueError("'duration_hours' must be a positive finite number.")
+
+    metadata = _event_metadata(data)
+    validated = {
+        "name": cleaned_text["name"],
+        "description": cleaned_text["description"],
+        "organizer": cleaned_text["organizer"],
+        "required_skills": required_skills,
+        "slots_needed": slots_needed,
+        "status": "open",
+        **metadata,
+    }
+    if duration_hours is not None:
+        validated["duration_hours"] = float(duration_hours)
+    return validated
+
+
+def create_event(data: Mapping[str, Any]) -> str:
+    """Validate and save an event, returning its generated event ID."""
+    event_data = validate_event_data(data)
     status = data.get("status", "open")
     if status not in ("open", "completed"):
         raise ValueError("'status' must be 'open' or 'completed'.")
+    event_data["status"] = status
 
-    metadata = _event_metadata(data)
     events = load(EVENTS_FILE)
     if not isinstance(events, dict):
         raise ValueError("events.json must contain an object keyed by event ID.")
@@ -131,14 +161,8 @@ def create_event(data: Mapping[str, Any]) -> str:
     event_id = f"e{max(existing_ids, default=0) + 1}"
 
     events[event_id] = {
-        "name": cleaned_text["name"],
-        "description": cleaned_text["description"],
-        "organizer": cleaned_text["organizer"],
-        "required_skills": required_skills,
-        "slots_needed": slots_needed,
-        "status": status,
+        **event_data,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        **metadata,
     }
     save(EVENTS_FILE, events)
     return event_id
@@ -162,7 +186,7 @@ def find_eligible_events(
     type: str | None = None,
     date: str | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Return open events the user qualifies for as (event_id, event) pairs."""
+    """Return matching open events; application eligibility is checked separately."""
     if not isinstance(user, Mapping):
         raise ValueError("User must be a mapping containing a skills mapping.")
 
@@ -176,7 +200,6 @@ def find_eligible_events(
     if not isinstance(events, dict):
         raise ValueError("events.json must contain an object keyed by event ID.")
 
-    user_skills = user.get("skills", {})
     results: list[tuple[str, dict[str, Any]]] = []
 
     for event_id, event in events.items():
@@ -190,9 +213,6 @@ def find_eligible_events(
             raise ValueError(
                 f"Event '{event_id}' must contain required_skills as an object."
             )
-        if not check_eligibility(user_skills, required_skills):
-            continue
-
         text = " ".join(
             value
             for value in (
@@ -239,6 +259,50 @@ def find_eligible_events(
         results.append((event_id, event))
 
     return results
+
+
+def get_event_eligibility_reason(
+    user: Mapping[str, Any], event: Mapping[str, Any]
+) -> str | None:
+    """Explain why this account cannot apply, without hiding the event."""
+    if user.get("role") != "Student Volunteer":
+        return "Only student volunteers can apply."
+
+    required_skills = event.get("required_skills", {})
+    user_skills = user.get("skills", {})
+    if not isinstance(required_skills, Mapping):
+        return "This event's skill requirements are invalid."
+    if any(
+        not isinstance(minimum, int)
+        or isinstance(minimum, bool)
+        or minimum < 0
+        for minimum in required_skills.values()
+    ):
+        return "This event's skill requirements are invalid."
+    if not isinstance(user_skills, Mapping):
+        user_skills = {}
+    if check_eligibility(user_skills, required_skills):
+        return None
+
+    ratings = {
+        name.strip().casefold(): rating
+        for name, rating in user_skills.items()
+        if isinstance(name, str) and name.strip()
+    }
+    unmet = []
+    for name, minimum in required_skills.items():
+        if not isinstance(name, str) or not name.strip():
+            continue
+        current = ratings.get(name.strip().casefold())
+        if (
+            not isinstance(current, int)
+            or isinstance(current, bool)
+            or current < minimum
+        ):
+            unmet.append(f"{name.strip()} (rating {minimum} required)")
+    if unmet:
+        return "Required skills not met: " + ", ".join(unmet) + "."
+    return "Your skills do not meet this event's requirements."
 
 
 def _as_utc_datetime(value: Any) -> datetime | None:
@@ -375,6 +439,16 @@ def apply_to_event(user_id: str, event_id: str) -> str:
     if event.get("status") != "open":
         raise ValueError(f"Event '{event_id}' is not open for applications.")
 
+    users = load(USERS_FILE)
+    if not isinstance(users, dict):
+        raise ValueError("users.json must contain an object keyed by username.")
+    user = users.get(user_id)
+    if not isinstance(user, Mapping):
+        raise ValueError(f"User '{user_id}' was not found.")
+    reason = get_event_eligibility_reason(user, event)
+    if reason:
+        raise ValueError(reason)
+
     applications = load(APPLICATIONS_FILE)
     if not isinstance(applications, dict):
         raise ValueError("applications.json must contain an object keyed by event ID.")
@@ -412,6 +486,22 @@ def apply_to_event(user_id: str, event_id: str) -> str:
     }
     applications[event_id] = event_applications
     save(APPLICATIONS_FILE, applications)
+    organizer_id = event.get("organizer")
+    if isinstance(organizer_id, str) and organizer_id.strip():
+        volunteer_name = user.get("name")
+        if not isinstance(volunteer_name, str) or not volunteer_name.strip():
+            volunteer_name = user_id
+        event_name = event.get("name", "your event")
+        add_notifications(
+            [organizer_id],
+            kind="application_submitted",
+            title="New volunteer application",
+            message=(
+                f"{volunteer_name} applied to {event_name}. "
+                "Review the application in your dashboard."
+            ),
+            event_id=event_id,
+        )
     return "Applied"
 
 
