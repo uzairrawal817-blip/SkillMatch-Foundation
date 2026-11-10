@@ -1,6 +1,6 @@
 
 {% extends "base.html" %}
-{% from "macros.html" import empty_state, toast %}
+{% from "macros.html" import empty_state, toast, event_image %}
 
 {% block title %}Certificates · SkillMatch{% endblock %}
 
@@ -28,7 +28,8 @@
         <div class="team-grid">
           {% for item in events %}
             <article class="team-card">
-              <p class="eyebrow">Event · {{ item.event_id }}</p>
+              {{ event_image(item.event) }}
+              <p class="eyebrow">Event certificate</p>
               <h2>{{ item.event.name }}</h2>
               {% if item.event.status == "completed" %}
                 <p role="status">This event is complete. Certificates have been issued to accepted volunteers.</p>
@@ -67,6 +68,7 @@
         <div class="team-grid">
           {% for certificate in certificates %}
             <article class="team-card">
+              {{ event_image(certificate.event) }}
               <p class="eyebrow">Certificate · {{ certificate.verification_code }}</p>
               <h2>{{ certificate.event_name }}</h2>
               <p>{{ certificate.hours|format_decimal }} volunteer hours</p>

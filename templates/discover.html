@@ -1,5 +1,5 @@
 {% if not partial %}{% extends "base.html" %}{% endif %}
-{% from "macros.html" import empty_state %}
+{% from "macros.html" import empty_state, event_image %}
 {% from "event_card_data.html" import event_date_block, event_skills_and_seats %}
 
 {% macro render_event_cards(matches) -%}
@@ -8,6 +8,7 @@
       {% for match in matches %}
         {% set event = match.event %}
         <article class="team-card event-card" aria-labelledby="event-title-{{ match.event_id }}">
+          {{ event_image(event) }}
           <div class="event-card-layout">
             {{ event_date_block(match.card_data) }}
             <div class="event-card__body">
@@ -19,6 +20,7 @@
 
               <div class="event-card__meta">
                 <span class="event-card__meta-chip">Organizer: {{ event.organizer }}</span>
+                <span class="event-card__meta-chip">{{ event_visual(event).category }}</span>
                 {% set event_department = event.get("department", event.get("dept")) %}
                 {% if event_department %}
                   <span class="event-card__meta-chip">{{ event_department }}</span>

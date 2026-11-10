@@ -40,6 +40,21 @@
                  value="{{ form_values.get('venue', '') }}">
         </p>
         <p class="event-form-field">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            {% for category in event_categories %}
+              <option value="{{ category }}" {% if form_values.get('category', 'Community Service') == category %}selected{% endif %}>{{ category }}</option>
+            {% endfor %}
+          </select>
+        </p>
+        <p class="event-form-field">
+          <label for="image_url">Event image URL (optional)</label>
+          <input id="image_url" name="image_url" type="url" maxlength="2048"
+                 value="{{ form_values.get('image_url', '') }}" placeholder="https://…"
+                 aria-describedby="image-url-help">
+          <small id="image-url-help">Use an HTTPS photo URL you have permission to share. Leave blank for the category stock photo.</small>
+        </p>
+        <p class="event-form-field">
           <label for="date">Date</label>
           <input id="date" name="date" type="date" required
                  value="{{ form_values.get('date', '') }}">

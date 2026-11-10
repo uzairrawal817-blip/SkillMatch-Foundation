@@ -1,15 +1,7 @@
 {% if not partial %}{% extends "base.html" %}{% endif %}
 {% from "macros.html" import empty_state, modal, modal_panel, toast %}
-{% from "event_card_data.html" import event_date_block %}
 
 {% block title %}{% if not partial %}Organizer dashboard · SkillMatch{% endif %}{% endblock %}
-
-{% block extra_css %}
-  {% if not partial %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='event-cards.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard-cards.css') }}">
-  {% endif %}
-{% endblock %}
 
 {% block content %}
   {% if partial == "applicants" %}
@@ -31,31 +23,14 @@
               {% if applicant.department %}
                 <p><strong>Department:</strong> {{ applicant.department }}</p>
               {% endif %}
-              <section class="dashboard-skill-comparison" aria-label="Required skill match">
-                <h4>Required skill match</h4>
-                {% if applicant.skill_matches %}
-                  <ul class="dashboard-skill-list">
-                    {% for match in applicant.skill_matches %}
-                      <li class="dashboard-skill-chip {{ 'dashboard-skill-chip--met' if match.met else 'dashboard-skill-chip--unmet' }}">
-                        <span class="dashboard-skill-chip__name">{{ match.name }}</span>
-                        <span>
-                          Applicant: {{ match.applicant_rating if match.applicant_rating is not none else "No rating" }}
-                          · Needs {{ match.required_rating }}
-                        </span>
-                        <strong class="dashboard-skill-chip__result">
-                          {{ "Met" if match.met else "Not met" }}
-                        </strong>
-                      </li>
-                    {% endfor %}
-                  </ul>
-                {% else %}
-                  {{ empty_state(
-                    "No required skills are set for this event.",
-                    "Edit event",
-                    url_for("dashboard.edit_event", event_id=event_id)
-                  ) }}
-                {% endif %}
-              </section>
+              {% if applicant.skill_items %}
+                <p>
+                  <strong>Skills:</strong>
+                  {% for skill, rating in applicant.skill_items %}
+                    {{ skill }} ({{ rating }}){% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </p>
+              {% endif %}
 
               {% if applicant.status == "accepted" %}
                 <p><strong>Assigned role:</strong> {{ applicant.role or "Not assigned" }}</p>
@@ -122,7 +97,7 @@
       {% endif %}
     {% endcall %}
   {% else %}
-    <section class="dashboard-page" aria-labelledby="dashboard-title">
+    <section aria-labelledby="dashboard-title">
       <header class="section-heading">
         <p class="eyebrow">Organizer workspace</p>
         <h1 id="dashboard-title">Your events</h1>
@@ -135,46 +110,33 @@
         {{ toast(message, category) }}
       {% endfor %}
 
-      {% if dashboard_cards %}
-        <div class="team-grid dashboard-event-grid">
-          {% for card in dashboard_cards %}
-            <article class="team-card dashboard-event-card"
-                     aria-labelledby="event-title-{{ loop.index }}">
-              <div class="dashboard-event-card__layout">
-                {{ event_date_block(card) }}
-                <div class="dashboard-event-card__body">
-                  <div class="dashboard-event-card__heading">
-                    <div>
-                      <p class="eyebrow">Your event</p>
-                      <h2 id="event-title-{{ loop.index }}">{{ card.event.name }}</h2>
-                    </div>
-                    <span class="status-pill dashboard-event-card__status">
-                      {{ card.status }}
-                    </span>
-                  </div>
-                  <p>{{ card.event.description }}</p>
-                  <p class="dashboard-event-card__seats">
-                    <strong>Seats filled:</strong>
-                    {{ card.seats_filled }} of {{ card.total_seats }}
-                  </p>
-                  <div class="dashboard-applicant-counts" aria-label="Applicant counts">
-                    {% for count in card.applicant_counts %}
-                      <span class="dashboard-applicant-count">
-                        {{ count.label }} <strong>{{ count.count }}</strong>
-                      </span>
-                    {% endfor %}
-                  </div>
-                  <div class="dashboard-event-card__actions">
-                    <a class="button button--secondary"
-                       href="{{ url_for('dashboard.edit_event', event_id=card.event_id) }}">Edit event</a>
-                    <a class="button button--secondary"
-                       href="{{ url_for('dashboard.contributions', event_id=card.event_id) }}">View Contributions</a>
-                    {% call modal("Review applicants") %}
-                      {{ url_for("dashboard.applicants", event_id=card.event_id) }}
-                    {% endcall %}
-                  </div>
-                </div>
-              </div>
+      {% if events %}
+        <div class="team-grid">
+          {% for item in events %}
+            <article class="team-card" aria-labelledby="event-title-{{ loop.index }}">
+              <p class="eyebrow">Event · {{ item.event_id }}</p>
+              <h2 id="event-title-{{ loop.index }}">{{ item.event.name }}</h2>
+              <p>{{ item.event.description }}</p>
+              {% if item.event_date %}
+                <p><strong>Event date:</strong> {{ item.event_date }}</p>
+              {% endif %}
+              <p>
+                <strong>Volunteer slots:</strong>
+                {{ item.accepted_count }} of {{ item.event.slots_needed }} filled
+                · {{ item.slots_remaining }} remaining
+              </p>
+              <p>
+                <strong>Applications:</strong>
+                {{ item.pending_count }} pending · {{ item.accepted_count }} accepted ·
+                {{ item.rejected_count }} rejected
+              </p>
+              <p><a class="button button--secondary"
+                    href="{{ url_for('dashboard.edit_event', event_id=item.event_id) }}">Edit event</a></p>
+              <p><a class="button button--secondary"
+                    href="{{ url_for('dashboard.contributions', event_id=item.event_id) }}">View Contributions</a></p>
+              {% call modal("Review applicants") %}
+                {{ url_for("dashboard.applicants", event_id=item.event_id) }}
+              {% endcall %}
             </article>
           {% endfor %}
         </div>

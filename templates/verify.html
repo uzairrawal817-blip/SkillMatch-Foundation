@@ -41,6 +41,19 @@
             <p><strong>Hours:</strong> {{ certificate.hours|format_decimal }}</p>
           {% endif %}
           <p><strong>Verification code:</strong> {{ certificate.verification_code }}</p>
+          <section class="verified-certificate-preview" aria-label="Verified certificate preview">
+            <p><strong>Certificate category:</strong> {{ certificate.theme.category }}</p>
+            <p>{{ certificate.theme.citation }}</p>
+            <iframe class="certificate-pdf-preview"
+                    src="{{ url_for('certificates.verified_certificate_preview', verification_code=certificate.verification_code) }}"
+                    title="Verified certificate for {{ certificate.volunteer_name }}"
+                    loading="lazy"></iframe>
+            <p>
+              <a class="button button--secondary"
+                 href="{{ url_for('certificates.verified_certificate_preview', verification_code=certificate.verification_code) }}"
+                 target="_blank" rel="noopener">Open printable certificate</a>
+            </p>
+          </section>
         </section>
       {% else %}
         <p class="toast toast--error" role="alert">Certificate not found or invalid.</p>
